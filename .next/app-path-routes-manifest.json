@@ -1,0 +1,8 @@
+{
+  "/api/export/csv/route": "/api/export/csv",
+  "/_not-found/page": "/_not-found",
+  "/api/reports/route": "/api/reports",
+  "/api/trips/[id]/route": "/api/trips/[id]",
+  "/api/trips/route": "/api/trips",
+  "/page": "/"
+}

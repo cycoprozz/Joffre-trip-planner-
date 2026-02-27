@@ -1,0 +1,181 @@
+// DriverPay Log - Prisma Schema
+// Database for driver payroll tracking
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum TripType {
+  POINT_TO_POINT
+  DIRECTED_HOURLY
+  OUT_OF_TOWN_DAILY
+}
+
+enum ServiceArea {
+  ATLANTA_IN_PERIMETER
+  OUTSIDE_PERIMETER
+}
+
+enum RoundingRule {
+  EXACT
+  NEAREST_15_MIN
+  UP_TO_15_MIN
+}
+
+enum TripStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELED
+  NO_SHOW
+}
+
+// ============================================
+// MODELS
+// ============================================
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  name         String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  trips     Trip[]
+  settings  Settings?
+  auditLogs AuditLog[]
+
+  @@map("users")
+}
+
+model Settings {
+  id                       String       @id @default(uuid()) @map("id")
+  userId                   String       @unique @map("user_id")
+  
+  // Rates
+  p2pAtlantaRate           Decimal      @default(25) @db.Decimal(10, 2)
+  p2pOutsideRate           Decimal      @default(38) @db.Decimal(10, 2)
+  hourlyRate               Decimal      @default(20) @db.Decimal(10, 2)
+  outOfTownDailyRate      Decimal      @default(300) @db.Decimal(10, 2)
+  
+  // Defaults
+  roundingDefault          RoundingRule @default(NEAREST_15_MIN) @map("rounding_default")
+  privacyMode             Boolean      @default(false) @map("privacy_mode")
+  
+  createdAt               DateTime      @default(now()) @map("created_at")
+  updatedAt               DateTime      @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("settings")
+}
+
+model Trip {
+  id           String     @id @default(uuid())
+  userId       String     @map("user_id")
+  date         DateTime   @db.Date
+  
+  // Trip classification
+  tripType     TripType   @map("trip_type")
+  serviceArea  ServiceArea? // Only for POINT_TO_POINT
+  
+  // Pickup
+  pickupDatetime     DateTime @map("pickup_datetime")
+  pickupLocationName String?  @map("pickup_location_name")
+  pickupAddressLine1 String?  @map("pickup_address_line1")
+  pickupCity         String?  @map("pickup_city")
+  pickupState        String?  @map("pickup_state")
+  pickupZip          String?  @map("pickup_zip")
+  pickupLat          Decimal? @db.Decimal(10, 8)
+  pickupLng          Decimal? @db.Decimal(11, 8)
+  
+  // Dropoff
+  dropoffDatetime     DateTime? @map("dropoff_datetime")
+  dropoffLocationName String?   @map("dropoff_location_name")
+  dropoffAddressLine1 String?   @map("dropoff_address_line1")
+  dropoffCity         String?   @map("dropoff_city")
+  dropoffState        String?   @map("dropoff_state")
+  dropoffZip          String?   @map("dropoff_zip")
+  dropoffLat          Decimal?  @db.Decimal(10, 8)
+  dropoffLng          Decimal?  @db.Decimal(11, 8)
+  
+  // Hourly tracking (only for DIRECTED_HOURLY)
+  startTime      DateTime?  @map("start_time")
+  endTime        DateTime?   @map("end_time")
+  breakMinutes   Int         @default(0) @map("break_minutes")
+  computedMinutes Int?       @map("computed_minutes")
+  computedHours  Decimal?    @db.Decimal(10, 4) @map("computed_hours")
+  roundingRule   RoundingRule @default(NEAREST_15_MIN) @map("rounding_rule")
+  
+  // Out of town (only for OUT_OF_TOWN_DAILY)
+  outOfTownLocation String?   @map("out_of_town_location")
+  dayCount          Int         @default(1) @map("day_count")
+  
+  // Admin fields
+  clientName          String?  @map("client_name")
+  dispatcherSource    String?  @map("dispatcher_source")
+  confirmationNumber  String?  @map("confirmation_number")
+  vehicle             String?
+  notes               String?
+  
+  // Status
+  status TripStatus @default(SCHEDULED)
+  
+  // Pay fields
+  baseRate        Decimal  @default(0) @db.Decimal(10, 2) @map("base_rate")
+  computedPay     Decimal  @default(0) @db.Decimal(10, 2) @map("computed_pay")
+  adjustmentsAmount Decimal @default(0) @db.Decimal(10, 2) @map("adjustments_amount")
+  finalPay        Decimal  @default(0) @db.Decimal(10, 2) @map("final_pay")
+  payBreakdownJson Json?   @map("pay_breakdown_json")
+  
+  // Metadata
+  isImported Boolean @default(false) @map("is_imported")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  editedAt   DateTime @map("edited_at")
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  auditLogs AuditLog[]
+  
+  @@index([userId, date])
+  @@index([userId, tripType])
+  @@index([userId, status])
+  @@map("trips")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  tripId      String   @map("trip_id")
+  userId      String   @map("user_id")
+  fieldChanged String  @map("field_changed")
+  oldValue    String?  @map("old_value")
+  newValue    String?  @map("new_value")
+  changedAt   DateTime @default(now()) @map("changed_at")
+  
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([tripId])
+  @@index([userId, changedAt])
+  @@map("audit_logs")
+}
+
+// ============================================
+// TYPE DEFINITIONS FOR PRISMA
+// ============================================
+
+model Decimal {
+  import Decimal as DecimalType
+  
+  @@ignore
+}
