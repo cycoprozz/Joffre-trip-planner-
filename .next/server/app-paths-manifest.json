@@ -1,8 +1,0 @@
-{
-  "/api/export/csv/route": "app/api/export/csv/route.js",
-  "/_not-found/page": "app/_not-found/page.js",
-  "/api/reports/route": "app/api/reports/route.js",
-  "/api/trips/[id]/route": "app/api/trips/[id]/route.js",
-  "/api/trips/route": "app/api/trips/route.js",
-  "/page": "app/page.js"
-}
